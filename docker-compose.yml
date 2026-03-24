@@ -1,0 +1,43 @@
+# Superset + Redis (cache). Postgres is expected to be reachable via DB_* in .env
+# (remote host or host.docker.internal for a DB on the same machine).
+#
+# Usage:
+#   docker compose up -d --build
+#   Open http://localhost:9196
+#
+# Ensure .env sets CACHE_REDIS_URL=redis://redis:6379/0 (service name `redis`).
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  superset:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: superset-embed:local
+    container_name: superset_custom
+    restart: unless-stopped
+    ports:
+      - "9196:9196"
+    env_file:
+      - .env
+    environment:
+      # Metadata DB (Superset app tables). Uses variables from .env.
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+      SUPERSET_PORT: "9196"
+      # Overrides any short SUPERSET_CONFIG_PATH from .env; must match bind-mount + Dockerfile PYTHONPATH.
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./custom_security_manager.py:/app/pythonpath/custom_security_manager.py:ro
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:
+  superset_home:
